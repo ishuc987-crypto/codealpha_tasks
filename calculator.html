@@ -1,0 +1,1740 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Calc — Glass Calculator</title>
+  <meta name="description" content="A modern glassmorphism calculator with scientific mode, memory functions, and history." />
+  <style>
+/* ==========================================================================
+   GLASS CALCULATOR — style.css
+   Design language: frosted glassmorphism panels floating over a slow-drifting
+   aurora gradient, with a monospaced "LED" readout for the display and a
+   violet → cyan accent used sparingly for operators, equals, and focus states.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------------- *
+ * 1. DESIGN TOKENS
+ * ---------------------------------------------------------------------- */
+
+:root {
+  /* Accent gradient — the one bold move, reused everywhere something is
+     "active": equals, operators, focus rings, the scientific toggle. */
+  --accent-violet: #8b5cf6;
+  --accent-cyan: #22d3ee;
+  --accent-gradient: linear-gradient(135deg, var(--accent-violet), var(--accent-cyan));
+  --accent-warm: #fb923c;
+
+  /* Typography */
+  --font-display: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, Helvetica, Arial, sans-serif;
+
+  /* Shape + motion */
+  --radius-card: 32px;
+  --radius-btn: 18px;
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-medium: 320ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dark theme (default) */
+:root,
+[data-theme='dark'] {
+  --bg-1: #0a0d1a;
+  --bg-2: #150f2e;
+  --blob-a: #8b5cf6;
+  --blob-b: #22d3ee;
+  --blob-c: #f472b6;
+  --blob-opacity: 0.35;
+
+  --glass-bg: rgba(255, 255, 255, 0.055);
+  --glass-bg-strong: rgba(255, 255, 255, 0.09);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+  --text-primary: #f4f4fa;
+  --text-secondary: #9797ad;
+  --text-on-accent: #ffffff;
+
+  --btn-number-bg: rgba(255, 255, 255, 0.045);
+  --btn-number-bg-hover: rgba(255, 255, 255, 0.09);
+  --btn-function-bg: rgba(251, 146, 60, 0.14);
+  --btn-function-text: #fdba74;
+  --btn-operator-bg: rgba(139, 92, 246, 0.22);
+  --btn-operator-text: #d8caff;
+  --btn-sci-bg: rgba(34, 211, 238, 0.1);
+  --btn-sci-text: #a5f3fc;
+  --btn-mem-bg: rgba(255, 255, 255, 0.04);
+  --btn-mem-text: #c4c4d6;
+
+  --display-glow: rgba(139, 92, 246, 0.35);
+  --scrim-bg: rgba(4, 3, 12, 0.55);
+}
+
+/* Light theme */
+[data-theme='light'] {
+  --bg-1: #eef1ff;
+  --bg-2: #fdf1fb;
+  --blob-a: #a78bfa;
+  --blob-b: #67e8f9;
+  --blob-c: #f9a8d4;
+  --blob-opacity: 0.55;
+
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-strong: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.9);
+  --glass-shadow: 0 20px 50px rgba(76, 60, 140, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+
+  --text-primary: #1c1a2e;
+  --text-secondary: #6b6b85;
+  --text-on-accent: #ffffff;
+
+  --btn-number-bg: rgba(255, 255, 255, 0.5);
+  --btn-number-bg-hover: rgba(255, 255, 255, 0.8);
+  --btn-function-bg: rgba(251, 146, 60, 0.18);
+  --btn-function-text: #c2410c;
+  --btn-operator-bg: rgba(139, 92, 246, 0.16);
+  --btn-operator-text: #6d28d9;
+  --btn-sci-bg: rgba(34, 211, 238, 0.16);
+  --btn-sci-text: #0e7490;
+  --btn-mem-bg: rgba(255, 255, 255, 0.45);
+  --btn-mem-text: #4b4b63;
+
+  --display-glow: rgba(139, 92, 246, 0.18);
+  --scrim-bg: rgba(30, 20, 60, 0.25);
+}
+
+/* ---------------------------------------------------------------------- *
+ * 2. RESET + BASE
+ * ---------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  background: radial-gradient(ellipse at top, var(--bg-2), var(--bg-1));
+  min-height: 100vh;
+  overflow-x: hidden;
+  transition: background var(--transition-medium), color var(--transition-medium);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* Consistent, visible keyboard focus everywhere */
+button:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------- *
+ * 3. AMBIENT AURORA BACKGROUND (signature decorative element)
+ * ---------------------------------------------------------------------- */
+
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: var(--blob-opacity);
+  will-change: transform;
+}
+
+.blob-a {
+  width: 46vw;
+  height: 46vw;
+  max-width: 520px;
+  max-height: 520px;
+  top: -12%;
+  left: -8%;
+  background: var(--blob-a);
+  animation: drift-a 26s ease-in-out infinite;
+}
+
+.blob-b {
+  width: 38vw;
+  height: 38vw;
+  max-width: 460px;
+  max-height: 460px;
+  bottom: -14%;
+  right: -6%;
+  background: var(--blob-b);
+  animation: drift-b 32s ease-in-out infinite;
+}
+
+.blob-c {
+  width: 30vw;
+  height: 30vw;
+  max-width: 380px;
+  max-height: 380px;
+  top: 40%;
+  right: 20%;
+  background: var(--blob-c);
+  animation: drift-c 22s ease-in-out infinite;
+}
+
+@keyframes drift-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(6vw, 8vh) scale(1.12); }
+}
+@keyframes drift-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-7vw, -6vh) scale(1.08); }
+}
+@keyframes drift-c {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-5vw, 7vh) scale(0.94); }
+}
+
+/* ---------------------------------------------------------------------- *
+ * 4. LAYOUT
+ * ---------------------------------------------------------------------- */
+
+.app {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+/* ---------------------------------------------------------------------- *
+ * 5. CALCULATOR CARD (glass panel)
+ * ---------------------------------------------------------------------- */
+
+.calculator {
+  width: 100%;
+  max-width: 400px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  padding: 22px 22px 26px;
+  transition: background var(--transition-medium), border-color var(--transition-medium), transform var(--transition-fast);
+}
+
+.calculator.shake {
+  animation: shake 420ms ease;
+}
+
+@keyframes shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+
+/* ---- Header ---- */
+
+.calc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 14px;
+}
+
+.brand-name {
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  color: var(--text-secondary);
+  background: transparent;
+  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+
+.icon-btn:hover {
+  background: var(--btn-number-bg-hover);
+  color: var(--text-primary);
+}
+
+.icon-btn:active {
+  transform: scale(0.92);
+}
+
+.icon-btn svg {
+  width: 19px;
+  height: 19px;
+}
+
+.text-icon-btn {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.text-icon-btn.active {
+  background: var(--accent-gradient);
+  color: #fff;
+}
+
+/* Theme toggle: show sun in dark mode (click to go light), moon in light mode */
+.icon-moon { display: none; }
+[data-theme='dark'] #themeToggle .icon-sun { display: block; }
+[data-theme='dark'] #themeToggle .icon-moon { display: none; }
+[data-theme='light'] #themeToggle .icon-sun { display: none; }
+[data-theme='light'] #themeToggle .icon-moon { display: block; }
+
+/* ---- Display ---- */
+
+.display {
+  position: relative;
+  padding: 18px 6px 8px;
+  margin-bottom: 18px;
+  min-height: 118px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.display-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 18px;
+  margin-bottom: 6px;
+}
+
+.memory-indicator {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  border: 1px solid var(--accent-cyan);
+  border-radius: 6px;
+  padding: 1px 6px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.memory-indicator.visible {
+  opacity: 1;
+}
+
+.expression {
+  flex: 1;
+  text-align: right;
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+  min-height: 18px;
+}
+
+.result-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.result {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(34px, 9vw, 46px);
+  line-height: 1.1;
+  text-align: right;
+  word-break: break-all;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 26px var(--display-glow);
+  flex: 1;
+}
+
+.copy-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: var(--text-secondary);
+  position: relative;
+  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+
+.copy-btn svg { width: 17px; height: 17px; }
+
+.copy-btn:hover {
+  background: var(--btn-number-bg-hover);
+  color: var(--accent-cyan);
+}
+
+.copy-btn:active { transform: scale(0.9); }
+
+.copy-btn::after {
+  content: 'Copied';
+  position: absolute;
+  bottom: 120%;
+  right: 0;
+  font-size: 11px;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  background: var(--accent-gradient);
+  color: #fff;
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+  pointer-events: none;
+}
+
+.copy-btn.copied::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Error toast */
+.error-toast {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: -6px;
+  transform: translateY(0);
+  text-align: right;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fda4af;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  pointer-events: none;
+}
+
+.error-toast.show {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------- *
+ * 6. KEYPAD
+ * ---------------------------------------------------------------------- */
+
+.keypad {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+/* Scientific rows collapse smoothly via the grid-template-rows 0fr -> 1fr
+   trick, which animates height without knowing the content's real height.
+   It requires exactly one grid item, hence the .sci-rows-inner wrapper. */
+.sci-rows {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows var(--transition-medium), opacity var(--transition-medium);
+}
+
+.sci-rows-inner {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  visibility: hidden;
+  transition: visibility 0s linear var(--transition-medium);
+}
+
+.calculator.sci-active .sci-rows {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.calculator.sci-active .sci-rows-inner {
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+/* ---- Buttons ---- */
+
+.btn {
+  position: relative;
+  min-height: 56px;
+  border-radius: var(--radius-btn);
+  font-size: 18px;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--btn-number-bg);
+  color: var(--text-primary);
+  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.btn:hover {
+  background: var(--btn-number-bg-hover);
+}
+
+.btn:active,
+.btn.pressed {
+  transform: scale(0.94);
+}
+
+.btn-number { font-family: var(--font-display); }
+
+.btn-zero {
+  grid-column: span 2;
+  justify-content: center;
+  padding-left: 4px;
+}
+
+.btn-function {
+  background: var(--btn-function-bg);
+  color: var(--btn-function-text);
+  font-size: 16px;
+}
+
+.btn-operator {
+  background: var(--btn-operator-bg);
+  color: var(--btn-operator-text);
+  font-family: var(--font-display);
+  font-size: 20px;
+}
+
+.btn-equals {
+  background: var(--accent-gradient);
+  color: var(--text-on-accent);
+  font-size: 22px;
+  box-shadow: 0 10px 26px -6px rgba(139, 92, 246, 0.55);
+}
+
+.btn-equals:hover {
+  filter: brightness(1.08);
+}
+
+.btn-mem {
+  min-height: 42px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-family: var(--font-display);
+  background: var(--btn-mem-bg);
+  color: var(--btn-mem-text);
+}
+
+.btn-sci {
+  min-height: 46px;
+  border-radius: 14px;
+  font-size: 14px;
+  background: var(--btn-sci-bg);
+  color: var(--btn-sci-text);
+}
+
+.btn-sci sup { font-size: 10px; }
+
+/* ---------------------------------------------------------------------- *
+ * 7. HISTORY DRAWER
+ * ---------------------------------------------------------------------- */
+
+.history-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 20;
+  height: 100%;
+  width: min(340px, 92vw);
+  background: var(--glass-bg-strong);
+  border-left: 1px solid var(--glass-border);
+  backdrop-filter: blur(30px) saturate(150%);
+  -webkit-backdrop-filter: blur(30px) saturate(150%);
+  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.35);
+  transform: translateX(100%);
+  transition: transform var(--transition-medium);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 18px;
+}
+
+.history-panel.open {
+  transform: translateX(0);
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.history-header h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 2px;
+}
+
+.history-empty {
+  color: var(--text-secondary);
+  font-size: 14px;
+  text-align: center;
+  margin-top: 40px;
+}
+
+.history-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--btn-number-bg);
+  text-align: right;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.history-item:hover {
+  background: var(--btn-number-bg-hover);
+  transform: translateX(-2px);
+}
+
+.history-expr {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.history-result {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.clear-history-btn {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(251, 113, 133, 0.14);
+  color: #fb7185;
+  font-weight: 600;
+  font-size: 14px;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.clear-history-btn:hover { background: rgba(251, 113, 133, 0.22); }
+.clear-history-btn:active { transform: scale(0.97); }
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  background: var(--scrim-bg);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-medium);
+}
+
+.scrim.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ---------------------------------------------------------------------- *
+ * 8. RESPONSIVE BREAKPOINTS
+ * ---------------------------------------------------------------------- */
+
+/* Tablet */
+@media (min-width: 601px) and (max-width: 900px) {
+  .calculator { max-width: 420px; padding: 26px 26px 30px; }
+  .btn { min-height: 60px; }
+}
+
+/* Desktop: a little more breathing room and a slightly larger card */
+@media (min-width: 901px) {
+  .calculator { max-width: 430px; padding: 28px 28px 32px; }
+  .btn { min-height: 60px; }
+  .btn:hover { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); }
+}
+
+/* Mobile: full-width card, larger touch targets, full-screen history sheet */
+@media (max-width: 600px) {
+  .app { padding: 12px; align-items: stretch; }
+  .calculator {
+    max-width: none;
+    margin: auto 0;
+    padding: 18px 16px 20px;
+    border-radius: 26px;
+  }
+  .btn { min-height: 58px; font-size: 19px; }
+  .result { font-size: clamp(32px, 11vw, 42px); }
+  .history-panel { width: 100%; border-left: none; }
+}
+
+@media (max-width: 360px) {
+  .btn { min-height: 52px; font-size: 17px; }
+  .row { gap: 8px; }
+  .keypad { gap: 8px; }
+}
+
+/* ---------------------------------------------------------------------- *
+ * 9. ACCESSIBILITY: respect reduced-motion preference
+ * ---------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+  </style>
+</head>
+<body>
+
+  <!-- Ambient animated background blobs (purely decorative, sit behind everything) -->
+  <div class="aurora" aria-hidden="true">
+    <span class="blob blob-a"></span>
+    <span class="blob blob-b"></span>
+    <span class="blob blob-c"></span>
+  </div>
+
+  <main class="app">
+    <div class="calculator" id="calculator">
+
+      <!-- ============ HEADER ============ -->
+      <header class="calc-header">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">∷</span>
+          <span class="brand-name">calc.</span>
+        </div>
+
+        <div class="header-actions">
+          <!-- Scientific mode toggle -->
+          <button
+            id="sciToggle"
+            class="icon-btn text-icon-btn"
+            type="button"
+            aria-pressed="false"
+            aria-label="Toggle scientific mode"
+            title="Scientific mode"
+          >xʸ</button>
+
+          <!-- History drawer toggle -->
+          <button
+            id="historyToggle"
+            class="icon-btn"
+            type="button"
+            aria-expanded="false"
+            aria-label="Open calculation history"
+            title="History"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"></circle>
+              <polyline points="12 7 12 12 15.5 14"></polyline>
+            </svg>
+          </button>
+
+          <!-- Theme toggle -->
+          <button
+            id="themeToggle"
+            class="icon-btn"
+            type="button"
+            aria-label="Toggle light and dark theme"
+            title="Toggle theme"
+          >
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4.5"></circle>
+              <path d="M12 2.5v2.4M12 19.1v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"></path>
+            </svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- ============ DISPLAY ============ -->
+      <section class="display" aria-live="polite">
+        <div class="display-meta-row">
+          <span class="memory-indicator" id="memoryIndicator">M</span>
+          <span class="expression" id="expression"></span>
+        </div>
+
+        <div class="result-row">
+          <div class="result" id="result">0</div>
+          <button class="copy-btn" id="copyBtn" type="button" aria-label="Copy result to clipboard" title="Copy result">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="12" height="12" rx="2.5"></rect>
+              <path d="M5 15V4.5A1.5 1.5 0 0 1 6.5 3H15"></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Error toast, shown briefly for invalid operations -->
+        <div class="error-toast" id="errorToast" role="alert"></div>
+      </section>
+
+      <!-- ============ KEYPAD ============ -->
+      <div class="keypad" id="keypad">
+
+        <!-- Memory row -->
+        <div class="row row-memory">
+          <button class="btn btn-mem" data-action="mc" type="button">MC</button>
+          <button class="btn btn-mem" data-action="mr" type="button">MR</button>
+          <button class="btn btn-mem" data-action="m-plus" type="button">M+</button>
+          <button class="btn btn-mem" data-action="m-minus" type="button">M−</button>
+        </div>
+
+        <!-- Scientific rows: hidden unless sci mode is active. The single
+             .sci-rows-inner wrapper is what CSS collapses to 0fr / 1fr. -->
+        <div class="sci-rows" id="sciRows">
+          <div class="sci-rows-inner">
+            <div class="row">
+              <button class="btn btn-sci" data-value="(" type="button">(</button>
+              <button class="btn btn-sci" data-value=")" type="button">)</button>
+              <button class="btn btn-sci" data-action="pow" type="button">x<sup>y</sup></button>
+              <button class="btn btn-sci" data-action="sqrt" type="button">√x</button>
+            </div>
+            <div class="row">
+              <button class="btn btn-sci" data-action="sin" type="button">sin</button>
+              <button class="btn btn-sci" data-action="cos" type="button">cos</button>
+              <button class="btn btn-sci" data-action="tan" type="button">tan</button>
+              <button class="btn btn-sci" data-action="log" type="button">log</button>
+            </div>
+            <div class="row">
+              <button class="btn btn-sci" data-action="ln" type="button">ln</button>
+              <button class="btn btn-sci" data-action="pi" type="button">π</button>
+              <button class="btn btn-sci" data-action="euler" type="button">e</button>
+              <button class="btn btn-sci" data-action="factorial" type="button">x!</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Function row -->
+        <div class="row">
+          <button class="btn btn-function" data-action="clear" type="button">C</button>
+          <button class="btn btn-function" data-action="backspace" type="button" aria-label="Backspace">⌫</button>
+          <button class="btn btn-function" data-action="percent" type="button">%</button>
+          <button class="btn btn-operator" data-value="÷" type="button" aria-label="Divide">÷</button>
+        </div>
+
+        <!-- Digits + operators -->
+        <div class="row">
+          <button class="btn btn-number" data-value="7" type="button">7</button>
+          <button class="btn btn-number" data-value="8" type="button">8</button>
+          <button class="btn btn-number" data-value="9" type="button">9</button>
+          <button class="btn btn-operator" data-value="×" type="button" aria-label="Multiply">×</button>
+        </div>
+        <div class="row">
+          <button class="btn btn-number" data-value="4" type="button">4</button>
+          <button class="btn btn-number" data-value="5" type="button">5</button>
+          <button class="btn btn-number" data-value="6" type="button">6</button>
+          <button class="btn btn-operator" data-value="−" type="button" aria-label="Subtract">−</button>
+        </div>
+        <div class="row">
+          <button class="btn btn-number" data-value="1" type="button">1</button>
+          <button class="btn btn-number" data-value="2" type="button">2</button>
+          <button class="btn btn-number" data-value="3" type="button">3</button>
+          <button class="btn btn-operator" data-value="+" type="button" aria-label="Add">+</button>
+        </div>
+        <div class="row">
+          <button class="btn btn-number btn-zero" data-value="0" type="button">0</button>
+          <button class="btn btn-number" data-value="." type="button" aria-label="Decimal point">.</button>
+          <button class="btn btn-equals" data-action="equals" type="button" aria-label="Equals">=</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ HISTORY DRAWER ============ -->
+    <aside class="history-panel" id="historyPanel" aria-label="Calculation history">
+      <div class="history-header">
+        <h2>History</h2>
+        <button class="icon-btn" id="closeHistory" type="button" aria-label="Close history">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 6l12 12M18 6L6 18"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="history-list" id="historyList">
+        <p class="history-empty">No calculations yet.</p>
+      </div>
+      <button class="clear-history-btn" id="clearHistoryBtn" type="button">Clear history</button>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+  </main>
+
+  <script>
+/* ==========================================================================
+   GLASS CALCULATOR — script.js
+   Vanilla JavaScript calculator engine + UI controller.
+   No frameworks, no external libraries, no build step.
+   ========================================================================== */
+
+'use strict';
+
+/* ==========================================================================
+   1. APPLICATION STATE
+   ========================================================================== */
+
+const state = {
+  expression: '',       // The live, editable expression string (what the big display shows while typing)
+  lastEvaluatedExpr: '', // The most recently evaluated expression (shown small, above the result)
+  justEvaluated: false,  // True immediately after "=" — controls whether the next keystroke starts fresh or chains
+  memory: 0,              // Calculator memory register (MC / MR / M+ / M-)
+  history: [],            // Array of { expr, result, id } — most recent first, capped at 10
+  sciMode: false,         // Whether the scientific button rows are visible
+};
+
+// Operator glyphs used throughout the UI (kept distinct from ASCII so the
+// display reads like a "real" calculator: − × ÷ rather than - * /).
+const OPERATORS = ['+', '−', '×', '÷', '^'];
+
+// Maps a scientific function's internal name to the text inserted into the
+// expression when its button is pressed (always opens a parenthesis).
+const FUNC_LABELS = { sin: 'sin(', cos: 'cos(', tan: 'tan(', log: 'log(', ln: 'ln(', sqrt: '√(' };
+
+// Characters after which typing a new "term" (digit, function, constant, "(")
+// requires an implicit multiplication sign first, e.g. "2π" -> "2 × π",
+// "5(" -> "5 × (", "3!2" -> "3! × 2". This mirrors real scientific calculators.
+const CLOSED_OPERAND_CHARS = [')', '%', '!', 'π', 'e'];
+
+/* ==========================================================================
+   2. MATH ENGINE — tokenizer + recursive-descent parser/evaluator
+   This section has no DOM dependencies, so it can run anywhere (including
+   headless tests). It never uses eval().
+   ========================================================================== */
+
+/**
+ * Converts a display expression (e.g. "12 + sin(30) × 2") into a flat list
+ * of tokens the parser can consume. Whitespace is ignored.
+ */
+function tokenize(rawString) {
+  const tokens = [];
+  const s = rawString.replace(/\s+/g, '');
+  let i = 0;
+
+  while (i < s.length) {
+    const c = s[i];
+
+    // Numbers (digits with at most one decimal point)
+    if ((c >= '0' && c <= '9') || c === '.') {
+      let start = i;
+      while (i < s.length && ((s[i] >= '0' && s[i] <= '9') || s[i] === '.')) i++;
+      const numStr = s.slice(start, i);
+      if ((numStr.match(/\./g) || []).length > 1) {
+        throw new Error('Invalid number format');
+      }
+      if (numStr === '.' || numStr === '') {
+        throw new Error('Invalid number format');
+      }
+      tokens.push({ type: 'NUM', value: parseFloat(numStr) });
+      continue;
+    }
+
+    // Constants
+    if (c === 'π') { tokens.push({ type: 'NUM', value: Math.PI }); i++; continue; }
+    if (c === 'e') { tokens.push({ type: 'NUM', value: Math.E }); i++; continue; }
+
+    // Functions (checked before single characters so "sin" isn't mistaken for "s","i","n")
+    if (s.startsWith('sin', i)) { tokens.push({ type: 'FUNC', value: 'sin' }); i += 3; continue; }
+    if (s.startsWith('cos', i)) { tokens.push({ type: 'FUNC', value: 'cos' }); i += 3; continue; }
+    if (s.startsWith('tan', i)) { tokens.push({ type: 'FUNC', value: 'tan' }); i += 3; continue; }
+    if (s.startsWith('log', i)) { tokens.push({ type: 'FUNC', value: 'log' }); i += 3; continue; }
+    if (s.startsWith('ln', i)) { tokens.push({ type: 'FUNC', value: 'ln' }); i += 2; continue; }
+    if (c === '√') { tokens.push({ type: 'FUNC', value: 'sqrt' }); i++; continue; }
+
+    // Parentheses
+    if (c === '(') { tokens.push({ type: 'LPAREN' }); i++; continue; }
+    if (c === ')') { tokens.push({ type: 'RPAREN' }); i++; continue; }
+
+    // Operators
+    if (c === '+') { tokens.push({ type: 'OP', value: '+' }); i++; continue; }
+    if (c === '−' || c === '-') { tokens.push({ type: 'OP', value: '-' }); i++; continue; }
+    if (c === '×' || c === '*') { tokens.push({ type: 'OP', value: '*' }); i++; continue; }
+    if (c === '÷' || c === '/') { tokens.push({ type: 'OP', value: '/' }); i++; continue; }
+    if (c === '^') { tokens.push({ type: 'OP', value: '^' }); i++; continue; }
+
+    // Postfix operators
+    if (c === '%') { tokens.push({ type: 'PERCENT' }); i++; continue; }
+    if (c === '!') { tokens.push({ type: 'FACT' }); i++; continue; }
+
+    throw new Error(`Unexpected character: "${c}"`);
+  }
+
+  return tokens;
+}
+
+/** n! — non-negative integers only, capped to avoid runaway computation. */
+function factorial(n) {
+  if (!Number.isFinite(n) || n < 0 || Math.abs(n - Math.round(n)) > 1e-9) {
+    throw new Error('Factorial requires a non-negative integer');
+  }
+  const intN = Math.round(n);
+  if (intN > 170) throw new Error('Number too large for factorial');
+  let result = 1;
+  for (let k = 2; k <= intN; k++) result *= k;
+  return result;
+}
+
+/** Applies a named scientific function. Trig functions operate in degrees. */
+function applyFunction(name, arg) {
+  switch (name) {
+    case 'sin': return Math.sin((arg * Math.PI) / 180);
+    case 'cos': return Math.cos((arg * Math.PI) / 180);
+    case 'tan': {
+      const normalized = ((arg % 360) + 360) % 360;
+      if (Math.abs(normalized - 90) < 1e-9 || Math.abs(normalized - 270) < 1e-9) {
+        throw new Error('Tangent is undefined at this angle');
+      }
+      return Math.tan((arg * Math.PI) / 180);
+    }
+    case 'log':
+      if (arg <= 0) throw new Error('Log is undefined for values ≤ 0');
+      return Math.log10(arg);
+    case 'ln':
+      if (arg <= 0) throw new Error('Ln is undefined for values ≤ 0');
+      return Math.log(arg);
+    case 'sqrt':
+      if (arg < 0) throw new Error('Cannot take the square root of a negative number');
+      return Math.sqrt(arg);
+    default:
+      throw new Error('Unknown function');
+  }
+}
+
+/**
+ * Recursive-descent grammar (highest to lowest precedence, unary highest):
+ *   expression := term (('+' | '-') term)*
+ *   term       := factor (('*' | '/') factor)*
+ *   factor     := unary ('^' factor)?              // right-associative
+ *   unary      := ('-' | '+')? postfix
+ *   postfix    := primary ('%' | '!')*
+ *   primary    := NUMBER | '(' expression ')' | FUNC '(' expression ')'
+ */
+function evaluateExpression(rawString) {
+  const tokens = tokenize(rawString);
+  if (tokens.length === 0) throw new Error('Empty expression');
+  let pos = 0;
+
+  const peek = () => tokens[pos];
+  const consume = () => tokens[pos++];
+
+  function parseExpression() {
+    let value = parseTerm();
+    while (peek() && peek().type === 'OP' && (peek().value === '+' || peek().value === '-')) {
+      const op = consume().value;
+      const rhs = parseTerm();
+      value = op === '+' ? value + rhs : value - rhs;
+    }
+    return value;
+  }
+
+  function parseTerm() {
+    let value = parseFactor();
+    while (peek() && peek().type === 'OP' && (peek().value === '*' || peek().value === '/')) {
+      const op = consume().value;
+      const rhs = parseFactor();
+      if (op === '/') {
+        if (rhs === 0) throw new Error('Cannot divide by zero');
+        value = value / rhs;
+      } else {
+        value = value * rhs;
+      }
+    }
+    return value;
+  }
+
+  function parseFactor() {
+    const base = parseUnary();
+    if (peek() && peek().type === 'OP' && peek().value === '^') {
+      consume();
+      const exponent = parseFactor(); // right-associative: 2^3^2 = 2^(3^2)
+      return Math.pow(base, exponent);
+    }
+    return base;
+  }
+
+  function parseUnary() {
+    if (peek() && peek().type === 'OP' && peek().value === '-') {
+      consume();
+      return -parseUnary();
+    }
+    if (peek() && peek().type === 'OP' && peek().value === '+') {
+      consume();
+      return parseUnary();
+    }
+    return parsePostfix();
+  }
+
+  function parsePostfix() {
+    let value = parsePrimary();
+    while (peek() && (peek().type === 'PERCENT' || peek().type === 'FACT')) {
+      const tok = consume();
+      value = tok.type === 'PERCENT' ? value / 100 : factorial(value);
+    }
+    return value;
+  }
+
+  function parsePrimary() {
+    const tok = peek();
+    if (!tok) throw new Error('Unexpected end of expression');
+
+    if (tok.type === 'NUM') {
+      consume();
+      return tok.value;
+    }
+    if (tok.type === 'LPAREN') {
+      consume();
+      const value = parseExpression();
+      if (!peek() || peek().type !== 'RPAREN') throw new Error('Missing closing parenthesis');
+      consume();
+      return value;
+    }
+    if (tok.type === 'FUNC') {
+      const funcName = consume().value;
+      if (!peek() || peek().type !== 'LPAREN') throw new Error(`Expected "(" after ${funcName}`);
+      consume();
+      const arg = parseExpression();
+      if (!peek() || peek().type !== 'RPAREN') throw new Error('Missing closing parenthesis');
+      consume();
+      return applyFunction(funcName, arg);
+    }
+    throw new Error('Unexpected token in expression');
+  }
+
+  const result = parseExpression();
+  if (pos < tokens.length) throw new Error('Unexpected token at end of expression');
+  if (typeof result !== 'number' || Number.isNaN(result)) throw new Error('Invalid calculation');
+  if (!Number.isFinite(result)) throw new Error('Result is too large');
+  return result;
+}
+
+/** Formats a raw numeric result into the plain (comma-free) string we store and chain from. */
+function formatNumber(num) {
+  if (!Number.isFinite(num)) throw new Error('Result is too large or undefined');
+  let rounded = Math.round((num + Number.EPSILON) * 1e10) / 1e10;
+  if (Object.is(rounded, -0)) rounded = 0;
+
+  if (rounded !== 0 && (Math.abs(rounded) >= 1e15 || Math.abs(rounded) < 1e-9)) {
+    return rounded.toExponential(6);
+  }
+  let str = rounded.toString();
+  if (str.includes('.')) {
+    const [intPart, decPart] = str.split('.');
+    if (decPart.length > 10) str = `${intPart}.${decPart.slice(0, 10)}`;
+  }
+  return str;
+}
+
+/** Adds thousands separators to a plain numeric string, purely for display. */
+function addThousandsSeparators(numStr) {
+  if (numStr.includes('e') || numStr.includes('E')) return numStr; // leave scientific notation untouched
+  const negative = numStr.startsWith('-');
+  const unsigned = negative ? numStr.slice(1) : numStr;
+  const [intPart, decPart] = unsigned.split('.');
+  const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (negative ? '-' : '') + withCommas + (decPart !== undefined ? `.${decPart}` : '');
+}
+
+/* ==========================================================================
+   Export for headless testing (Node). Safe no-op in the browser: `module`
+   is undefined there, so this block never runs client-side.
+   ========================================================================== */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { tokenize, evaluateExpression, factorial, formatNumber, addThousandsSeparators };
+}
+
+/* ==========================================================================
+   3. INPUT HELPERS (pure string logic — no DOM access)
+   ========================================================================== */
+
+function isDigit(ch) { return ch >= '0' && ch <= '9'; }
+function isOperatorChar(ch) { return OPERATORS.includes(ch); }
+
+/** Last non-whitespace character currently in the expression. */
+function lastChar() {
+  const t = state.expression.replace(/\s+$/, '');
+  return t.length ? t[t.length - 1] : '';
+}
+
+/** Whether inserting a new "term" here needs an implicit × first. */
+function needsImplicitMultiply(lc) {
+  return CLOSED_OPERAND_CHARS.includes(lc) || isDigit(lc) || lc === '.';
+}
+
+function resetIfJustEvaluated() {
+  if (state.justEvaluated) {
+    state.expression = '';
+    state.justEvaluated = false;
+  }
+}
+
+/* ==========================================================================
+   4. INPUT HANDLERS (mutate state.expression, then re-render)
+   ========================================================================== */
+
+function appendDigit(digit) {
+  resetIfJustEvaluated();
+  const lc = lastChar();
+  state.expression += CLOSED_OPERAND_CHARS.includes(lc) ? ` × ${digit}` : digit;
+  render();
+}
+
+function appendDecimal() {
+  resetIfJustEvaluated();
+  const currentSegment = (state.expression.match(/[0-9.]*$/) || [''])[0];
+  if (currentSegment.includes('.')) return; // already has a decimal point
+  if (currentSegment === '') {
+    const lc = lastChar();
+    state.expression += CLOSED_OPERAND_CHARS.includes(lc) ? ' × 0.' : '0.';
+  } else {
+    state.expression += '.';
+  }
+  render();
+}
+
+function appendOperator(symbol) {
+  if (state.justEvaluated) {
+    // Chain from the previous result instead of starting over.
+    state.justEvaluated = false;
+  }
+  const trimmed = state.expression.replace(/\s+$/, '');
+
+  if (trimmed === '') {
+    if (symbol === '−') state.expression = '−'; // allow a leading negative sign
+    render();
+    return;
+  }
+  const lc = lastChar();
+  if (lc === '(') {
+    if (symbol === '−') { state.expression += '−'; render(); } // negative sign right after "("
+    return;
+  }
+  if (isOperatorChar(lc)) {
+    // Changed their mind — replace the trailing operator instead of stacking.
+    state.expression = trimmed.slice(0, -1) + symbol + ' ';
+    render();
+    return;
+  }
+  state.expression = `${trimmed} ${symbol} `;
+  render();
+}
+
+function appendFunction(name) {
+  resetIfJustEvaluated();
+  const lc = lastChar();
+  const label = FUNC_LABELS[name];
+  state.expression += (needsImplicitMultiply(lc) ? ' × ' : '') + label;
+  render();
+}
+
+function appendConstant(symbol) {
+  resetIfJustEvaluated();
+  const lc = lastChar();
+  state.expression += (needsImplicitMultiply(lc) ? ' × ' : '') + symbol;
+  render();
+}
+
+function appendParenOpen() {
+  resetIfJustEvaluated();
+  const lc = lastChar();
+  state.expression += (needsImplicitMultiply(lc) ? ' × ' : '') + '(';
+  render();
+}
+
+function appendParenClose() {
+  const openCount = (state.expression.match(/\(/g) || []).length;
+  const closeCount = (state.expression.match(/\)/g) || []).length;
+  if (openCount <= closeCount) return; // nothing open to close
+  const lc = lastChar();
+  if (lc === '' || isOperatorChar(lc) || lc === '(') return; // need a value before ")"
+  state.expression += ')';
+  render();
+}
+
+function appendPercent() {
+  const lc = lastChar();
+  if (!(isDigit(lc) || lc === ')' || lc === 'π' || lc === 'e' || lc === '%')) return;
+  state.expression += '%';
+  render();
+}
+
+function appendFactorial() {
+  const lc = lastChar();
+  if (!(isDigit(lc) || lc === ')' || lc === 'π' || lc === 'e')) return;
+  state.expression += '!';
+  render();
+}
+
+function backspace() {
+  if (state.justEvaluated) {
+    state.expression = '';
+    state.justEvaluated = false;
+    render();
+    return;
+  }
+  if (!state.expression) return;
+
+  if (/ [+\u2212×÷^] $/.test(state.expression)) {
+    state.expression = state.expression.slice(0, -3); // remove " X " as one unit
+  } else if (/(sin|cos|tan|log|ln|√)\($/.test(state.expression)) {
+    state.expression = state.expression.replace(/(sin|cos|tan|log|ln|√)\($/, ''); // remove whole function token
+  } else {
+    state.expression = state.expression.slice(0, -1);
+  }
+  render();
+}
+
+function clearAll() {
+  state.expression = '';
+  state.lastEvaluatedExpr = '';
+  state.justEvaluated = false;
+  render();
+}
+
+function equals() {
+  const expr = state.expression.trim();
+  if (!expr) return;
+  try {
+    const value = evaluateExpression(expr);
+    const formatted = formatNumber(value);
+    addHistoryEntry(expr, formatted);
+    state.expression = formatted;
+    state.lastEvaluatedExpr = expr;
+    state.justEvaluated = true;
+    render();
+  } catch (err) {
+    showError(err.message || 'Invalid expression');
+  }
+}
+
+/* ==========================================================================
+   5. MEMORY FUNCTIONS
+   ========================================================================== */
+
+function currentValueForMemory() {
+  const expr = state.expression.trim();
+  if (!expr) return 0;
+  try {
+    return evaluateExpression(expr);
+  } catch (err) {
+    showError('Finish the expression before using memory');
+    return null;
+  }
+}
+
+function memoryClear() { state.memory = 0; render(); }
+
+function memoryRecall() {
+  resetIfJustEvaluated();
+  const lc = lastChar();
+  state.expression += (needsImplicitMultiply(lc) ? ' × ' : '') + formatNumber(state.memory);
+  render();
+}
+
+function memoryAdd() {
+  const val = currentValueForMemory();
+  if (val === null) return;
+  state.memory += val;
+  render();
+}
+
+function memorySubtract() {
+  const val = currentValueForMemory();
+  if (val === null) return;
+  state.memory -= val;
+  render();
+}
+
+/* ==========================================================================
+   6. HISTORY (persisted to localStorage, capped at 10 entries)
+   ========================================================================== */
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem('calc-history');
+    state.history = raw ? JSON.parse(raw) : [];
+  } catch (err) {
+    state.history = []; // localStorage unavailable (e.g. private browsing) — fail quietly
+  }
+}
+
+function saveHistory() {
+  try {
+    localStorage.setItem('calc-history', JSON.stringify(state.history));
+  } catch (err) {
+    /* storage unavailable — history just won't persist across sessions */
+  }
+}
+
+function addHistoryEntry(expr, result) {
+  state.history.unshift({ expr, result, id: Date.now() });
+  if (state.history.length > 10) state.history.length = 10;
+  saveHistory();
+  renderHistoryList();
+}
+
+function clearHistory() {
+  state.history = [];
+  saveHistory();
+  renderHistoryList();
+}
+
+/* ==========================================================================
+   7. DOM REFERENCES + RENDERING
+   ========================================================================== */
+
+const el = {};
+
+function cacheDom() {
+  el.expression = document.getElementById('expression');
+  el.result = document.getElementById('result');
+  el.memoryIndicator = document.getElementById('memoryIndicator');
+  el.errorToast = document.getElementById('errorToast');
+  el.calculator = document.getElementById('calculator');
+  el.keypad = document.getElementById('keypad');
+  el.themeToggle = document.getElementById('themeToggle');
+  el.sciToggle = document.getElementById('sciToggle');
+  el.historyToggle = document.getElementById('historyToggle');
+  el.historyPanel = document.getElementById('historyPanel');
+  el.closeHistory = document.getElementById('closeHistory');
+  el.scrim = document.getElementById('scrim');
+  el.historyList = document.getElementById('historyList');
+  el.clearHistoryBtn = document.getElementById('clearHistoryBtn');
+  el.copyBtn = document.getElementById('copyBtn');
+}
+
+function render() {
+  el.expression.textContent = state.lastEvaluatedExpr ? `${state.lastEvaluatedExpr} =` : '';
+
+  if (!state.expression) {
+    el.result.textContent = '0';
+  } else if (state.justEvaluated) {
+    el.result.textContent = addThousandsSeparators(state.expression);
+  } else {
+    el.result.textContent = state.expression;
+  }
+
+  el.memoryIndicator.classList.toggle('visible', state.memory !== 0);
+}
+
+let errorTimeoutId = null;
+function showError(message) {
+  el.errorToast.textContent = message;
+  el.errorToast.classList.add('show');
+  el.calculator.classList.remove('shake');
+  // Force reflow so the shake animation can retrigger on consecutive errors.
+  void el.calculator.offsetWidth;
+  el.calculator.classList.add('shake');
+
+  clearTimeout(errorTimeoutId);
+  errorTimeoutId = setTimeout(() => el.errorToast.classList.remove('show'), 2500);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function renderHistoryList() {
+  el.historyList.innerHTML = '';
+  if (state.history.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'history-empty';
+    empty.textContent = 'No calculations yet.';
+    el.historyList.appendChild(empty);
+    return;
+  }
+  state.history.forEach((item) => {
+    const entry = document.createElement('button');
+    entry.type = 'button';
+    entry.className = 'history-item';
+    entry.innerHTML =
+      `<span class="history-expr">${escapeHtml(item.expr)} =</span>` +
+      `<span class="history-result">${escapeHtml(item.result)}</span>`;
+    entry.addEventListener('click', () => {
+      state.expression = item.result;
+      state.lastEvaluatedExpr = '';
+      state.justEvaluated = false;
+      render();
+      closeHistoryPanel();
+    });
+    el.historyList.appendChild(entry);
+  });
+}
+
+/* ==========================================================================
+   8. THEME (persisted to localStorage, falls back to system preference)
+   ========================================================================== */
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem('calc-theme', theme); } catch (err) { /* ignore */ }
+}
+
+function loadTheme() {
+  let theme = null;
+  try { theme = localStorage.getItem('calc-theme'); } catch (err) { /* ignore */ }
+  if (!theme) {
+    const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+    theme = prefersLight ? 'light' : 'dark';
+  }
+  applyTheme(theme);
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+
+/* ==========================================================================
+   9. SCIENTIFIC MODE + HISTORY PANEL TOGGLES
+   ========================================================================== */
+
+function toggleSciMode() {
+  state.sciMode = !state.sciMode;
+  el.calculator.classList.toggle('sci-active', state.sciMode);
+  el.sciToggle.classList.toggle('active', state.sciMode);
+  el.sciToggle.setAttribute('aria-pressed', String(state.sciMode));
+}
+
+function openHistoryPanel() {
+  el.historyPanel.classList.add('open');
+  el.scrim.classList.add('show');
+  el.historyToggle.setAttribute('aria-expanded', 'true');
+}
+
+function closeHistoryPanel() {
+  el.historyPanel.classList.remove('open');
+  el.scrim.classList.remove('show');
+  el.historyToggle.setAttribute('aria-expanded', 'false');
+}
+
+/* ==========================================================================
+   10. COPY TO CLIPBOARD
+   ========================================================================== */
+
+async function copyResult() {
+  const text = el.result.textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    flashCopyFeedback();
+  } catch (err) {
+    // Fallback for browsers without the async Clipboard API.
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand('copy');
+      flashCopyFeedback();
+    } catch (fallbackErr) {
+      showError('Could not copy the result');
+    }
+    document.body.removeChild(textarea);
+  }
+}
+
+function flashCopyFeedback() {
+  el.copyBtn.classList.add('copied');
+  setTimeout(() => el.copyBtn.classList.remove('copied'), 1200);
+}
+
+/* ==========================================================================
+   11. BUTTON CLICK DELEGATION
+   ========================================================================== */
+
+function handleValueInput(value) {
+  if (/^[0-9]$/.test(value)) return appendDigit(value);
+  if (value === '.') return appendDecimal();
+  if (value === '(') return appendParenOpen();
+  if (value === ')') return appendParenClose();
+  if (['+', '−', '×', '÷'].includes(value)) return appendOperator(value);
+}
+
+function handleAction(action) {
+  const actions = {
+    clear: clearAll,
+    backspace: backspace,
+    percent: appendPercent,
+    equals: equals,
+    pow: () => appendOperator('^'),
+    sqrt: () => appendFunction('sqrt'),
+    sin: () => appendFunction('sin'),
+    cos: () => appendFunction('cos'),
+    tan: () => appendFunction('tan'),
+    log: () => appendFunction('log'),
+    ln: () => appendFunction('ln'),
+    pi: () => appendConstant('π'),
+    euler: () => appendConstant('e'),
+    factorial: appendFactorial,
+    mc: memoryClear,
+    mr: memoryRecall,
+    'm-plus': memoryAdd,
+    'm-minus': memorySubtract,
+  };
+  if (actions[action]) actions[action]();
+}
+
+function flashButton(btn) {
+  if (!btn) return;
+  btn.classList.add('pressed');
+  setTimeout(() => btn.classList.remove('pressed'), 150);
+}
+
+function bindKeypadEvents() {
+  el.keypad.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    flashButton(btn);
+    if (btn.dataset.value) handleValueInput(btn.dataset.value);
+    else if (btn.dataset.action) handleAction(btn.dataset.action);
+  });
+}
+
+/* ==========================================================================
+   12. KEYBOARD SUPPORT
+   ========================================================================== */
+
+function flashMatching(selectorValue, isAction) {
+  const attr = isAction ? 'data-action' : 'data-value';
+  const btn = el.keypad.querySelector(`button[${attr}="${selectorValue}"]`);
+  flashButton(btn);
+}
+
+function handleKeydown(e) {
+  const key = e.key;
+
+  if (/^[0-9]$/.test(key)) { appendDigit(key); flashMatching(key, false); return; }
+
+  switch (key) {
+    case '.': appendDecimal(); flashMatching('.', false); break;
+    case '+': appendOperator('+'); flashMatching('+', false); break;
+    case '-': appendOperator('−'); flashMatching('−', false); break;
+    case '*': appendOperator('×'); flashMatching('×', false); break;
+    case '/': e.preventDefault(); appendOperator('÷'); flashMatching('÷', false); break;
+    case '^': appendOperator('^'); flashMatching('pow', true); break;
+    case '%': appendPercent(); flashMatching('percent', true); break;
+    case '!': appendFactorial(); flashMatching('factorial', true); break;
+    case '(': appendParenOpen(); flashMatching('(', false); break;
+    case ')': appendParenClose(); flashMatching(')', false); break;
+    case 'Enter':
+    case '=': e.preventDefault(); equals(); flashMatching('equals', true); break;
+    case 'Backspace': backspace(); flashMatching('backspace', true); break;
+    case 'Escape':
+    case 'Delete': clearAll(); flashMatching('clear', true); break;
+    default: break;
+  }
+}
+
+/* ==========================================================================
+   13. INITIALIZATION
+   ========================================================================== */
+
+function bindEvents() {
+  bindKeypadEvents();
+  el.themeToggle.addEventListener('click', toggleTheme);
+  el.sciToggle.addEventListener('click', toggleSciMode);
+  el.historyToggle.addEventListener('click', openHistoryPanel);
+  el.closeHistory.addEventListener('click', closeHistoryPanel);
+  el.scrim.addEventListener('click', closeHistoryPanel);
+  el.clearHistoryBtn.addEventListener('click', clearHistory);
+  el.copyBtn.addEventListener('click', copyResult);
+  window.addEventListener('keydown', handleKeydown);
+}
+
+function init() {
+  cacheDom();
+  loadTheme();
+  loadHistory();
+  renderHistoryList();
+  render();
+  bindEvents();
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', init);
+}
+
+  </script>
+</body>
+</html>
